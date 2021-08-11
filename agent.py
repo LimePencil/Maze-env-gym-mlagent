@@ -68,7 +68,7 @@ class agent():
                 step += 1
                 state = next_state
             if epi % save_interval == 0 and epi !=0:
-                torch.save(self.q_net, "trained_model" + str(epi) + .pth)
+                torch.save(self.q_net, "trained_model" + str(epi) + ".pth")
             if epi % print_interval == 0 and epi != 0:
                 print("episode: {} / step: {:.2f} / reward: {:.3f}".format(epi,np.mean(epi_length),np.mean(rewards)))
         env.close()
