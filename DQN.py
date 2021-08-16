@@ -24,7 +24,7 @@ class DQN(nn.Module):
         out = self.relu2(out)
         out = self.conv3(out)
         out = self.relu3(out)
-        # flatten the neur
+        # flatten the neural network
         out = out.view(out.size()[0], -1)
         out = self.fc4(out)
         out = self.relu4(out)
