@@ -1,3 +1,4 @@
+import collections
 import torch
 from ReplayBuffer import ReplayBuffer
 from gym_unity.envs import UnityToGymWrapper
@@ -15,17 +16,16 @@ from PIL import Image
 # TODO: memory allocation need to be fixed
 class Agent:
     def __init__(self):
-        # using GPU
+        # using GPU if possible
         if torch.cuda.is_available():
             dev = "cuda:0"
         else:
             dev = "cpu"
         self.device = torch.device(dev)
 
-        # initializing model
-        self.train_mode = True
+        # initializing model and variables
         self.load = False
-        self.path_to_save_file = ""
+        self.path_to_save_file = "model/pretrained_model.pth"
         self.number_of_actions = 8
         self.q_net = DQN(self.number_of_actions)
         self.q_net.to(self.device)
@@ -34,63 +34,57 @@ class Agent:
         self.learning_rate = 0.00025
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.learning_rate)
         self.loss = None
+        self.Transition = collections.namedtuple('Transition', ('state', 'action', 'reward', 'next_state'))
         # new environment from .exe file
         path_to_env = "envs/Ml-agent-with-gym"
         unity_env = UnityEnvironment(path_to_env, no_graphics=False)
         self.env = UnityToGymWrapper(unity_env, uint8_visual=False, allow_multiple_obs=True)
 
         self.writer = SummaryWriter('runs/maze_test_dqn_1')
-
+        # list for printing summary to terminal
         self.rewards = []
         self.epi_length = []
-
+        # epsilon values
         self.initial_epsilon = 1.0
         self.final_epsilon = 0.1
         self.epsilon = self.initial_epsilon
         self.epsilon_max_frame = 1000000
-
+        # more variables
         buffer_size_limit = 20000  # need to be set so that it does not go over the memory limit
         self.number_of_episode = 10000
         self.target_update_step = 2500
         self.print_interval = 5
-        self.save_interval = 5
-        self.replay_start_size = 500
+        self.save_interval = 10
+        self.replay_start_size = 5000
         self.batch_size = 32
         self.gamma = 0.99
         self.total_step = 0
+        self.epi = 0
         self.memory = ReplayBuffer(self.batch_size, buffer_size_limit)
-        # loading from save file TODO: not sure this works yet needs to be tested
+        # loading from save file
         if self.load:
             checkpoint = torch.load(self.path_to_save_file)
-            self.q_net = checkpoint['policy_net']
-            self.q_target_net = checkpoint['target_net']
+            self.q_net.load_state_dict(checkpoint['policy_net'])
+            self.q_target_net.load_state_dict(checkpoint['target_net'])
             self.memory.buffer = checkpoint['replay_memory']
             self.optimizer = checkpoint['optimizer']
+            self.epi = checkpoint['epi_num']
 
     # all the learning/training loop is in this function
     def main(self):
-        for epi in range(self.number_of_episode):
-            state = self.env.reset()
-            state = self.arr_to_tensor(state)
+        while self.epi < self.number_of_episode:
+            state = self.np_to_tensor(self.env.reset())
             cumulative_reward = 0
             step = 0
             while True:
-                # TODO: make sure to change multiplier of movement so that the player do not move too slowly
                 action = self.get_action(state)
                 next_state, reward, done, info = self.env.step(self.change_action_to_continuous(action))
                 cumulative_reward += reward
-                # if step < 20:
-                #     y = next_state[0]*255
-                #     z = y.astype(np.uint8)[:, :, 0]
-                #     im = Image.fromarray(z, 'L')
-                #     im.show()
-                next_state = self.arr_to_tensor(next_state)
-                if self.train_mode:
-                    self.memory.push(state, action, torch.tensor([reward]).to(self.device), next_state)
-                else:
-                    self.env.render()
-                    time.sleep(0.01)
+                next_state = self.np_to_tensor(next_state)
+                # push to replay memory
+                self.memory.push(state, action, torch.tensor([reward]).to(self.device), next_state)
 
+                # when it goes past max_step or reaches goal
                 if done:
                     self.rewards.append(cumulative_reward)
                     self.epi_length.append(step)
@@ -100,6 +94,7 @@ class Agent:
                     self.writer.add_scalar("Epsilon", self.epsilon, self.total_step)
                     self.writer.flush()
                     break
+
                 # learning
                 if len(self.memory.buffer) > self.replay_start_size:
                     self.loss = self.learn()
@@ -113,17 +108,22 @@ class Agent:
                 del state
                 state = next_state
                 del next_state
-            if epi % self.save_interval == 0 and epi != 0:
-                torch.save(
-                    {'policy_net': self.q_net, 'target_net': self.q_target_net, 'replay_memory': self.memory.buffer,
-                     'optimizer': self.optimizer, 'epi_num': epi}, "model/pretrained_model.pth")
 
-            if epi % self.print_interval == 0 and epi != 0:
-                print("episode: {} / step: {:.2f} / reward: {:.3f}".format(epi, np.mean(self.epi_length),
+            # saving every few episodes
+            if self.epi % self.save_interval == 0 and self.epi != 0:
+                torch.save(
+                    {'policy_net': self.q_net.state_dict(), 'target_net': self.q_target_net.state_dict(),
+                     'replay_memory': self.memory.buffer,
+                     'optimizer': self.optimizer, 'epi_num': self.epi}, "model/pretrained_model.pth")
+
+            # printing summary to terminal
+            if self.epi % self.print_interval == 0 and self.epi != 0:
+                print("episode: {} / step: {:.2f} / reward: {:.3f}".format(self.epi, np.mean(self.epi_length),
                                                                            np.mean(self.rewards)))
                 self.epi_length = []
                 self.rewards = []
 
+        # saving model in the end
         torch.save(self.q_net, 'model/dqn_model_final.pth')
         self.env.close()
         self.writer.close()
@@ -149,12 +149,13 @@ class Agent:
             arr[0] = -1
         return arr
 
+    # deep Q learning with replay memory
     def learn(self):
         # not starting learning until sufficient data is collected
         if len(self.memory.buffer) < self.batch_size:
             return
-        minibatch = self.memory.sample()
-        batch = self.memory.Transition(*zip(*minibatch))
+        mini_batch = self.memory.sample()
+        batch = self.Transition(*zip(*mini_batch))
         non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=self.device,
                                       dtype=torch.bool)
         non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
@@ -172,10 +173,7 @@ class Agent:
         self.optimizer.step()
         return loss
 
-    def arr_to_tensor(self, state):
-        changed = np.expand_dims(np.transpose(state[0], (2, 0, 1)), axis=0)
-        return torch.from_numpy(changed).to(self.device)
-
+    # getting action based on epsilon-greedy
     def get_action(self, state):
         # epsilon-greedy
         if self.epsilon > self.final_epsilon:
@@ -184,9 +182,21 @@ class Agent:
         return_val = None
         if rand > self.epsilon:
             # this was the freaking bug that I searched for 2 hours ahhhhhhh
-            return self.q_net(state).max(1)[1].view(1,)
+            return self.q_net(state).max(1)[1].view(1, )
         else:
             return torch.randint(0, self.number_of_actions, (1,), device=self.device)
+
+    # changing numpy array to image for verification
+    def to_image(self, state):
+        y = state * 255
+        z = y.astype(np.uint8)[:, :, 0]
+        im = Image.fromarray(z, 'L')
+        im.show()
+
+    # numpy array to tensor
+    def np_to_tensor(self, state):
+        changed = np.expand_dims(np.transpose(state[0], (2, 0, 1)), axis=0)
+        return torch.from_numpy(changed).to(self.device)
 
 
 if __name__ == "__main__":
