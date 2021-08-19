@@ -23,44 +23,54 @@ class Agent:
             dev = "cpu"
         self.device = torch.device(dev)
 
-        # initializing model and variables
-        self.load = False
-        self.path_to_save_file = "model/pretrained_model.pth"
-        self.number_of_actions = 8
-        self.q_net = DQN(self.number_of_actions)
-        self.q_net.to(self.device)
-        self.q_target_net = DQN(self.number_of_actions)
-        self.q_target_net.to(self.device)
-        self.learning_rate = 0.00025
-        self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.learning_rate)
-        self.loss = None
-        self.Transition = collections.namedtuple('Transition', ('state', 'action', 'reward', 'next_state'))
         # new environment from .exe file
         path_to_env = "envs/Ml-agent-with-gym"
         unity_env = UnityEnvironment(path_to_env, no_graphics=False)
         self.env = UnityToGymWrapper(unity_env, uint8_visual=False, allow_multiple_obs=True)
 
+        # tensorboard integration and summary writing
         self.writer = SummaryWriter('runs/maze_test_dqn_1')
+        self.print_interval = 5
+
         # list for printing summary to terminal
         self.rewards = []
         self.epi_length = []
+
         # epsilon values
         self.initial_epsilon = 1.0
         self.final_epsilon = 0.1
         self.epsilon = self.initial_epsilon
         self.epsilon_max_frame = 1000000
-        # more variables
-        buffer_size_limit = 20000  # need to be set so that it does not go over the memory limit
+
+        # variables for learning
+        self.number_of_actions = 8
+        self.learning_rate = 0.00025
         self.number_of_episode = 10000
         self.target_update_step = 10
-        self.print_interval = 5
-        self.save_interval = 10
-        self.replay_start_size = 5000
-        self.batch_size = 32
         self.gamma = 0.99
         self.total_step = 0
         self.epi = 0
+
+        # replay memory variables
+        self.Transition = collections.namedtuple('Transition', ('state', 'action', 'reward', 'next_state'))
+        self.replay_start_size = 5000
+        self.batch_size = 32
+        buffer_size_limit = 20000  # need to be set so that it does not go over the memory limit
+
+        # save variables
+        self.load = False
+        self.path_to_save_file = "model/pretrained_model.pth"
+        self.save_interval = 10
+
+        # three most important things
+        self.q_net = DQN(self.number_of_actions).to(self.device)
+        self.q_target_net = DQN(self.number_of_actions).to(self.device)
         self.memory = ReplayBuffer(self.batch_size, buffer_size_limit)
+
+        # uses adam optimizer and huber loss
+        self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.learning_rate)
+        self.loss = None
+
         # loading from save file
         if self.load:
             checkpoint = torch.load(self.path_to_save_file)
@@ -73,14 +83,18 @@ class Agent:
     # all the learning/training loop is in this function
     def main(self):
         while self.epi < self.number_of_episode:
+            # get state when reset
             state = self.np_to_tensor(self.env.reset())
             cumulative_reward = 0
             step = 0
             while True:
                 action = self.get_action(state)
+
                 next_state, reward, done, info = self.env.step(self.change_action_to_continuous(action))
+
                 cumulative_reward += reward
                 next_state = self.np_to_tensor(next_state)
+
                 # push to replay memory
                 self.memory.push(state, action, torch.tensor([reward]).to(self.device), next_state)
 
@@ -95,10 +109,11 @@ class Agent:
                     self.writer.flush()
                     break
 
-                # learning
+                # learning if possible
                 if len(self.memory.buffer) > self.replay_start_size:
                     self.loss = self.learn()
                     self.writer.add_scalar("Loss", self.loss, self.total_step)
+                    # updates target network every few steps
                     if step % self.target_update_step == 0:
                         self.q_target_net.load_state_dict(
                             self.q_net.state_dict())
@@ -108,20 +123,6 @@ class Agent:
                 del state
                 state = next_state
                 del next_state
-
-            # saving every few episodes
-            if self.epi % self.save_interval == 0 and self.epi != 0:
-                torch.save(
-                    {'policy_net': self.q_net.state_dict(), 'target_net': self.q_target_net.state_dict(),
-                     'replay_memory': self.memory.buffer,
-                     'optimizer': self.optimizer, 'epi_num': self.epi}, "model/pretrained_model.pth")
-
-            # printing summary to terminal
-            if self.epi % self.print_interval == 0 and self.epi != 0:
-                print("episode: {} / step: {:.2f} / reward: {:.3f}".format(self.epi, np.mean(self.epi_length),
-                                                                           np.mean(self.rewards)))
-                self.epi_length = []
-                self.rewards = []
 
         # saving model in the end
         torch.save(self.q_net, 'model/dqn_model_final.pth')
@@ -154,7 +155,11 @@ class Agent:
         # not starting learning until sufficient data is collected
         if len(self.memory.buffer) < self.batch_size:
             return
+
+        # get samples for learning
         mini_batch = self.memory.sample()
+
+        # pack it to individual tensor
         batch = self.Transition(*zip(*mini_batch))
         non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=self.device,
                                       dtype=torch.bool)
@@ -162,13 +167,20 @@ class Agent:
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action).unsqueeze(1)
         reward_batch = torch.cat(batch.reward).unsqueeze(1)
+
+        # get q value from policy network
         q_values = self.q_net(state_batch).gather(1, action_batch)
+
+        # get q value from target network using next state
         max_next_q = self.q_target_net(non_final_next_states).max(1)[0].unsqueeze(1).detach()
+
         target = reward_batch + self.gamma * max_next_q
 
+        # loss is square if >1 absolute value if <=1
         loss = F.smooth_l1_loss(q_values, target)
 
         self.optimizer.zero_grad()
+        # backpropagation
         loss.backward()
         self.optimizer.step()
         return loss
@@ -179,7 +191,6 @@ class Agent:
         if self.epsilon > self.final_epsilon:
             self.epsilon -= (self.initial_epsilon - self.final_epsilon) / self.epsilon_max_frame
         rand = random.random()
-        return_val = None
         if rand > self.epsilon:
             # this was the freaking bug that I searched for 2 hours ahhhhhhh
             return self.q_net(state).max(1)[1].view(1, )
@@ -197,6 +208,22 @@ class Agent:
     def np_to_tensor(self, state):
         changed = np.expand_dims(np.transpose(state[0], (2, 0, 1)), axis=0)
         return torch.from_numpy(changed).to(self.device)
+
+    # saves every interval
+    def checkpoint_save(self):
+        if self.epi % self.save_interval == 0 and self.epi != 0:
+            torch.save(
+                {'policy_net': self.q_net.state_dict(), 'target_net': self.q_target_net.state_dict(),
+                 'replay_memory': self.memory.buffer,
+                 'optimizer': self.optimizer, 'epi_num': self.epi}, "model/pretrained_model.pth")
+
+    # printing summary in the terminal
+    def print_summary(self):
+        if self.epi % self.print_interval == 0 and self.epi != 0:
+            print("episode: {} / step: {:.2f} / reward: {:.3f}".format(self.epi, np.mean(self.epi_length),
+                                                                       np.mean(self.rewards)))
+            self.epi_length = []
+            self.rewards = []
 
 
 if __name__ == "__main__":
