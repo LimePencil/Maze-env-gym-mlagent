@@ -3,7 +3,7 @@ import random
 
 
 Transition = collections.namedtuple('Transition', ('state', 'action', 'reward', 'next_state'))
-
+# buffer to save data for learning
 class ReplayBuffer():
     def __init__(self, batch_size, size_limit):
         self.buffer = collections.deque(maxlen=size_limit)

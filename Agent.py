@@ -52,7 +52,7 @@ class Agent:
         # more variables
         buffer_size_limit = 20000  # need to be set so that it does not go over the memory limit
         self.number_of_episode = 10000
-        self.target_update_step = 2500
+        self.target_update_step = 10
         self.print_interval = 5
         self.save_interval = 10
         self.replay_start_size = 5000

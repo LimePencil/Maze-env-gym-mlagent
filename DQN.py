@@ -16,7 +16,7 @@ class DQN(nn.Module):
         self.fc4 = nn.Linear(3136, 512)
         self.relu4 = nn.ReLU(inplace=True)
         self.fc5 = nn.Linear(512, number_of_actions)
-
+    # passing through neural network probably?
     def forward(self, x):
         out = self.conv1(x)
         out = self.relu1(out)
