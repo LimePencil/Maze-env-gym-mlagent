@@ -192,7 +192,6 @@ class Agent:
             self.epsilon -= (self.initial_epsilon - self.final_epsilon) / self.epsilon_max_frame
         rand = random.random()
         if rand > self.epsilon:
-            # this was the freaking bug that I searched for 2 hours ahhhhhhh
             return self.q_net(state).max(1)[1].view(1, )
         else:
             return torch.randint(0, self.number_of_actions, (1,), device=self.device)
