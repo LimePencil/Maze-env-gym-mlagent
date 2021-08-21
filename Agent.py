@@ -28,7 +28,7 @@ class Agent:
         path_to_env = None
         if os.name == "nt":
             os.path.join("envs","windows", "Ml-agent-with-gym")
-        elif os.name == "nt":
+        elif os.name == "posix":
             os.path.join("envs","linux", "Ml-agent-with-gym")
         unity_env = UnityEnvironment(path_to_env, no_graphics=False)
         self.env = UnityToGymWrapper(unity_env, uint8_visual=False, allow_multiple_obs=True)
