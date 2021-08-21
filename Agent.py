@@ -25,7 +25,11 @@ class Agent:
             dev = "cpu"
         self.device = torch.device(dev)
         # new environment from .exe file
-        path_to_env = os.path.join("envs", "Ml-agent-with-gym")
+        path_to_env = None
+        if os.name == "nt":
+            os.path.join("envs", "Ml-agent-with-gym")
+        elif os.name == "nt":
+            os.path.join("envs", "Ml-agent-with-gym")
         unity_env = UnityEnvironment(path_to_env, no_graphics=False)
         self.env = UnityToGymWrapper(unity_env, uint8_visual=False, allow_multiple_obs=True)
 
