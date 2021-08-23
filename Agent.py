@@ -1,6 +1,5 @@
-import collections
 import os
-
+import collections
 import torch
 from ReplayBuffer import ReplayBuffer
 from gym_unity.envs import UnityToGymWrapper
@@ -27,9 +26,9 @@ class Agent:
         # new environment from .exe file
         path_to_env = None
         if os.name == "nt":
-            os.path.join("envs","windows", "Ml-agent-with-gym")
+            path_to_env = os.path.join("envs","windows", "Ml-agent-with-gym")
         elif os.name == "posix":
-            os.path.join("envs","linux", "Ml-agent-with-gym")
+            path_to_env = os.path.join("envs","linux", "Ml-agent-with-gym.x86_64")
         unity_env = UnityEnvironment(path_to_env, no_graphics=False)
         self.env = UnityToGymWrapper(unity_env, uint8_visual=False, allow_multiple_obs=True)
 
