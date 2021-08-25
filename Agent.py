@@ -59,7 +59,7 @@ class Agent:
         self.Transition = collections.namedtuple('Transition', ('state', 'action', 'reward', 'next_state'))
         self.replay_start_size = 5000
         self.batch_size = 32
-        buffer_size_limit = 200000  # need to be set so that it does not go over the memory limit
+        buffer_size_limit = 100000  # need to be set so that it does not go over the memory limit
 
         # save variables
         self.load = False
@@ -86,6 +86,7 @@ class Agent:
             self.memory.buffer = checkpoint['replay_memory']
             self.optimizer = checkpoint['optimizer']
             self.epi = checkpoint['epi_num']
+            self.epsilon = checkpoint['epsilon']
 
     # all the learning/training loop is in this function
     def main(self):
@@ -225,7 +226,7 @@ class Agent:
             torch.save(
                 {'policy_net': self.q_net.state_dict(), 'target_net': self.q_target_net.state_dict(),
                  'replay_memory': self.memory.buffer,
-                 'optimizer': self.optimizer, 'epi_num': self.epi}, self.path_to_save_file)
+                 'optimizer': self.optimizer, 'epi_num': self.epi, 'epsilon':self.epsilon}, self.path_to_save_file)
 
     # printing summary in the terminal
     def print_summary(self):
