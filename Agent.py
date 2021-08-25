@@ -63,7 +63,7 @@ class Agent:
 
         # save variables
         self.load = False
-        self.path_to_save_file = "model/pretrained_model.pth"
+        self.path_to_save_file = os.path.join("model","pretrained_model.pth")
         self.save_interval = 10
 
         # three most important things
@@ -136,7 +136,7 @@ class Agent:
             self.epi += 1
 
         # saving model in the end
-        torch.save(self.q_net, 'model/dqn_model_final.pth')
+        torch.save(self.q_net, os.path.join("model","dqn_model_final.pth"))
         self.env.close()
         self.writer.close()
 
@@ -225,7 +225,7 @@ class Agent:
             torch.save(
                 {'policy_net': self.q_net.state_dict(), 'target_net': self.q_target_net.state_dict(),
                  'replay_memory': self.memory.buffer,
-                 'optimizer': self.optimizer, 'epi_num': self.epi}, "model/pretrained_model.pth")
+                 'optimizer': self.optimizer, 'epi_num': self.epi}, self.path_to_save_file)
 
     # printing summary in the terminal
     def print_summary(self):
