@@ -71,6 +71,7 @@ class Agent:
         self.q_target_net = DQN(self.number_of_actions).to(self.device)
         self.memory = ReplayBuffer(self.batch_size, buffer_size_limit)
 
+
         # uses adam optimizer and huber loss
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.learning_rate)
         self.loss = None
@@ -230,11 +231,16 @@ class Agent:
 
     # printing summary in the terminal
     def print_summary(self):
-        if self.epi % self.print_interval == 0 and self.epi != 0:
-            print("episode: {} / step: {:.2f} / reward: {:.3f} / time: {:.2f}s".format(self.epi, np.mean(self.epi_length),
-                                                                       np.mean(self.rewards),time.time()-self.start_time))
+        if self.epi % self.print_interval == 0:
+            message = "episode: {} / step: {:.2f} / reward: {:.3f} / time: {:.2f}s".format(self.epi, np.mean(self.epi_length),
+                                                                       np.mean(self.rewards),time.time()-self.start_time)
+            file = open(os.path.join(os.getcwd(),"record.txt"),'a',encoding='utf-8')
+            file.write(message +"\n")
+            file.close()
+            print(message)
             self.epi_length = []
             self.rewards = []
+
 
 
 if __name__ == "__main__":
