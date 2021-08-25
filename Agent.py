@@ -127,6 +127,8 @@ class Agent:
                 del state
                 state = next_state
                 del next_state
+            self.checkpoint_save()
+            self.print_summary()
             self.epi += 1
 
         # saving model in the end
