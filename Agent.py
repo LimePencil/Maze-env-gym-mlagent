@@ -34,7 +34,7 @@ class Agent:
 
         # tensorboard integration and summary writing
         self.writer = SummaryWriter('runs/maze_test_dqn_1')
-        self.print_interval = 5
+        self.print_interval = 1
 
         # list for printing summary to terminal
         self.rewards = []
@@ -127,6 +127,7 @@ class Agent:
                 del state
                 state = next_state
                 del next_state
+            self.epi += 1
 
         # saving model in the end
         torch.save(self.q_net, 'model/dqn_model_final.pth')
