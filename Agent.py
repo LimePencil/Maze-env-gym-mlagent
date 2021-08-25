@@ -59,7 +59,7 @@ class Agent:
         self.Transition = collections.namedtuple('Transition', ('state', 'action', 'reward', 'next_state'))
         self.replay_start_size = 5000
         self.batch_size = 32
-        buffer_size_limit = 20000  # need to be set so that it does not go over the memory limit
+        buffer_size_limit = 200000  # need to be set so that it does not go over the memory limit
 
         # save variables
         self.load = False
