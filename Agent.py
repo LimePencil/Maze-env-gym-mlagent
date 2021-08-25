@@ -75,6 +75,9 @@ class Agent:
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.learning_rate)
         self.loss = None
 
+        # time recording
+        self.start_time = 0
+
         # loading from save file
         if self.load:
             checkpoint = torch.load(self.path_to_save_file)
@@ -91,6 +94,7 @@ class Agent:
             state = self.np_to_tensor(self.env.reset())
             cumulative_reward = 0
             step = 0
+            self.start_time = time.time()
             while True:
                 action = self.get_action(state)
 
@@ -226,8 +230,8 @@ class Agent:
     # printing summary in the terminal
     def print_summary(self):
         if self.epi % self.print_interval == 0 and self.epi != 0:
-            print("episode: {} / step: {:.2f} / reward: {:.3f}".format(self.epi, np.mean(self.epi_length),
-                                                                       np.mean(self.rewards)))
+            print("episode: {} / step: {:.2f} / reward: {:.3f} / time: {:.2f}s".format(self.epi, np.mean(self.epi_length),
+                                                                       np.mean(self.rewards),time.time()-self.start_time))
             self.epi_length = []
             self.rewards = []
 
